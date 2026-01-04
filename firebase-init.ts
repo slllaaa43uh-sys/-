@@ -1,40 +1,46 @@
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
-// Safely access env
-const env = (import.meta as any).env || {};
+/**
+ * ============================================
+ * Firebase Configuration for Mehnati App
+ * ============================================
+ * تهيئة Firebase للإشعارات الخارجية (Push Notifications)
+ */
 
+// إعدادات Firebase - تُقرأ من متغيرات البيئة
 const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY,
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env.VITE_FIREBASE_APP_ID,
-  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyD08yfFqO32HBSU9SLxFx2UuPvkVdEhMWY",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "mihnty-e94ca.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mihnty-e94ca",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "mihnty-e94ca.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123005243140",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123005243140:web:7ba255ae7bcb25ccd58a51",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-E0QRH2YWPC"
 };
 
-let app = null;
-let messaging = null;
+// VAPID Key للإشعارات
+export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "sTw8qpWfiNulXC_NsqZhwhIXOfeUs65sYLiyCb8fpsY";
+
+let app: any = null;
+let messaging: any = null;
 
 try {
-  // Only attempt to initialize if we have at least an API key
-  if (firebaseConfig.apiKey) {
-    app = initializeApp(firebaseConfig);
-    
-    // Check for window/navigator to prevent SSR/Build errors
-    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
-        try {
-            messaging = getMessaging(app);
-        } catch (e) {
-            console.warn("Firebase Messaging not supported in this environment");
-        }
+  // تهيئة Firebase App
+  app = initializeApp(firebaseConfig);
+  console.log('✅ Firebase App initialized successfully');
+  
+  // تهيئة Firebase Messaging (فقط في المتصفح)
+  if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+    try {
+      messaging = getMessaging(app);
+      console.log('✅ Firebase Messaging initialized successfully');
+    } catch (e) {
+      console.warn('⚠️ Firebase Messaging not supported in this environment:', e);
     }
-  } else {
-      console.warn("Firebase Configuration missing. App will run in offline/demo mode.");
   }
 } catch (error) {
-  console.error("Firebase Initialization Error:", error);
+  console.error('❌ Firebase Initialization Error:', error);
 }
 
-export { messaging, getToken, onMessage };
+export { app, messaging, getToken, onMessage };
