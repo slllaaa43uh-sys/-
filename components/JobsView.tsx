@@ -9,7 +9,11 @@ import { JOB_CATEGORIES } from '../data/categories';
 import { API_BASE_URL } from '../constants';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getDisplayLocation } from '../data/locations';
-import { messaging, getToken, VAPID_KEY } from '../firebase-init';
+import { 
+  registerForPushNotifications, 
+  getStoredToken,
+  requestPermissions 
+} from '../services/pushNotifications';
 
 interface JobsViewProps {
   onFullScreenToggle: (isFull: boolean) => void;
@@ -43,24 +47,21 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
 
   const handleSubscribeJobs = async () => {
     try {
-      // 1. Request Browser Permission
-      const permission = await Notification.requestPermission();
+      // 1. التحقق من الصلاحيات وطلبها باستخدام Capacitor
+      const permission = await requestPermissions();
       if (permission !== 'granted') {
-        alert('يرجى السماح بالإشعارات من إعدادات المتصفح لتلقي تنبيهات الوظائف');
+        alert('يرجى السماح بالإشعارات من إعدادات التطبيق لتلقي تنبيهات الوظائف');
         return;
       }
       
-      // 2. Get Token
-      let fcmToken = localStorage.getItem('fcmToken');
+      // 2. الحصول على التوكن باستخدام Capacitor
+      let fcmToken = getStoredToken();
       const authToken = localStorage.getItem('token');
       
-      // إذا لم يكن fcmToken موجوداً، نحاول الحصول عليه
-      if (!fcmToken && messaging && getToken) {
+      // إذا لم يكن fcmToken موجوداً، نحاول التسجيل للحصول عليه
+      if (!fcmToken) {
         try {
-          fcmToken = await getToken(messaging, { vapidKey: VAPID_KEY });
-          if (fcmToken) {
-            localStorage.setItem('fcmToken', fcmToken);
-          }
+          fcmToken = await registerForPushNotifications();
         } catch (tokenError) {
           console.error('Error getting FCM token:', tokenError);
         }
@@ -76,7 +77,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
         return;
       }
       
-      // 3. Send Subscription to Backend
+      // 3. إرسال الاشتراك إلى الباك إند
       const response = await fetch(`${API_BASE_URL}/api/v1/fcm/subscribe`, {
         method: 'POST',
         headers: {

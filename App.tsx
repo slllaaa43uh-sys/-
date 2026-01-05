@@ -1,6 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { messaging, getToken, onMessage } from './firebase-init';
+import { messaging, onMessage } from './firebase-init';
+import { 
+  setupPushNotificationListeners, 
+  registerForPushNotifications,
+  removePushNotificationListeners,
+  isNativePlatform 
+} from './services/pushNotifications';
 import Header from './components/Header';
 import CreatePostBar from './components/CreatePostBar';
 import Stories from './components/Stories';
@@ -82,40 +88,56 @@ const AppContent: React.FC = () => {
   }, [token, showSplash]);
 
   useEffect(() => {
-    const initFirebaseNotifications = async () => {
+    const initPushNotifications = async () => {
       if (!token) return;
       
       try {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          if (messaging && getToken) {
-            const fcmToken = await getToken(messaging, {
-              vapidKey: (import.meta as any).env.VITE_FIREBASE_VAPID_KEY
-            });
-            
-            if (fcmToken) {
-              localStorage.setItem('fcmToken', fcmToken);
-              console.log('✅ FCM Token saved');
-            }
-            
-            if (onMessage) {
-              onMessage(messaging, (payload: any) => {
-                if (payload.notification) {
-                  new Notification(payload.notification.title || 'إشعار جديد', {
-                    body: payload.notification.body,
-                    icon: '/logo.png'
-                  });
-                }
+        // إعداد مستمعي Capacitor Push Notifications
+        setupPushNotificationListeners(
+          // عند استلام التوكن
+          (fcmToken) => {
+            console.log('✅ FCM Token received via Capacitor:', fcmToken);
+            // يمكن إرسال التوكن إلى الباك إند هنا إذا لزم الأمر
+          },
+          // عند استلام إشعار أثناء تشغيل التطبيق
+          (notification) => {
+            console.log('📬 Notification received:', notification);
+            // يمكن عرض إشعار محلي أو تحديث UI
+          },
+          // عند حدوث خطأ
+          (error) => {
+            console.error('❌ Push notification error:', error);
+          }
+        );
+        
+        // تسجيل الجهاز للإشعارات
+        const fcmToken = await registerForPushNotifications();
+        if (fcmToken) {
+          console.log('✅ Device registered for push notifications');
+        }
+        
+        // إعداد مستمع Firebase للإشعارات في الويب (fallback)
+        if (!isNativePlatform() && messaging && onMessage) {
+          onMessage(messaging, (payload: any) => {
+            if (payload.notification) {
+              new Notification(payload.notification.title || 'إشعار جديد', {
+                body: payload.notification.body,
+                icon: '/logo.png'
               });
             }
-          }
+          });
         }
       } catch (error) {
-        console.error('خطأ في Firebase:', error);
+        console.error('خطأ في تهيئة الإشعارات:', error);
       }
     };
     
-    setTimeout(initFirebaseNotifications, 1000);
+    setTimeout(initPushNotifications, 1000);
+    
+    // تنظيف المستمعين عند إلغاء التحميل
+    return () => {
+      removePushNotificationListeners();
+    };
   }, [token]);
 
   // --- Notification Polling Logic ---

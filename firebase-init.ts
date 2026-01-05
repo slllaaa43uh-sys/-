@@ -1,11 +1,14 @@
 import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { getMessaging, onMessage } from 'firebase/messaging';
 
 /**
  * ============================================
  * Firebase Configuration for Mehnati App
  * ============================================
  * تهيئة Firebase للإشعارات الخارجية (Push Notifications)
+ * 
+ * ملاحظة: تم إزالة getToken لأننا نستخدم Capacitor Push Notifications
+ * للحصول على التوكن في بيئة WebView (iOS/Android)
  */
 
 // إعدادات Firebase - تُقرأ من متغيرات البيئة
@@ -19,7 +22,7 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-E0QRH2YWPC"
 };
 
-// VAPID Key للإشعارات
+// VAPID Key للإشعارات (يُستخدم فقط في بيئة الويب إذا لزم الأمر)
 export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "sTw8qpWfiNulXC_NsqZhwhIXOfeUs65sYLiyCb8fpsY";
 
 let app: any = null;
@@ -43,4 +46,4 @@ try {
   console.error('❌ Firebase Initialization Error:', error);
 }
 
-export { app, messaging, getToken, onMessage };
+export { app, messaging, onMessage };
