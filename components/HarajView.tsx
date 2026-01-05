@@ -36,9 +36,6 @@ const HarajView: React.FC<HarajViewProps> = ({ onFullScreenToggle, currentLocati
   };
 
   const handleSubscribeHaraj = async () => {
-    alert(t('feature_coming_soon'));
-    return;
-
     try {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {

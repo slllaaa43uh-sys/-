@@ -41,9 +41,6 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
   };
 
   const handleSubscribeJobs = async () => {
-    alert(t('feature_coming_soon'));
-    return;
-
     try {
       // 1. Request Browser Permission
       const permission = await Notification.requestPermission();
