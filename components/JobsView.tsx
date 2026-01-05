@@ -9,6 +9,7 @@ import { JOB_CATEGORIES } from '../data/categories';
 import { API_BASE_URL } from '../constants';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getDisplayLocation } from '../data/locations';
+import { messaging, getToken, VAPID_KEY } from '../firebase-init';
 
 interface JobsViewProps {
   onFullScreenToggle: (isFull: boolean) => void;
@@ -50,8 +51,20 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
       }
       
       // 2. Get Token
-      const fcmToken = localStorage.getItem('fcmToken');
+      let fcmToken = localStorage.getItem('fcmToken');
       const authToken = localStorage.getItem('token');
+      
+      // إذا لم يكن fcmToken موجوداً، نحاول الحصول عليه
+      if (!fcmToken && messaging && getToken) {
+        try {
+          fcmToken = await getToken(messaging, { vapidKey: VAPID_KEY });
+          if (fcmToken) {
+            localStorage.setItem('fcmToken', fcmToken);
+          }
+        } catch (tokenError) {
+          console.error('Error getting FCM token:', tokenError);
+        }
+      }
       
       if (!fcmToken) {
         alert('جارٍ تهيئة نظام الإشعارات، يرجى المحاولة بعد قليل');
@@ -64,7 +77,6 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
       }
       
       // 3. Send Subscription to Backend
-      // Assuming backend endpoint /api/v1/fcm/subscribe handles topic subscription
       const response = await fetch(`${API_BASE_URL}/api/v1/fcm/subscribe`, {
         method: 'POST',
         headers: {
@@ -73,15 +85,14 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
         },
         body: JSON.stringify({
           deviceToken: fcmToken,
-          topic: 'jobs', // Topic for all jobs
-          subTopic: activeSubPage ? activeSubPage.type : 'all' // Optional: refined subscription
+          topic: 'jobs',
+          subTopic: activeSubPage ? activeSubPage.type : 'all'
         })
       });
       
       if (response.ok) {
         alert('✅ تم تفعيل إشعارات الوظائف بنجاح! ستصلك تنبيهات عند توفر وظائف جديدة.');
       } else {
-        // Fallback for demo if API isn't ready, generally we show success or handle specific error
         alert('حدث خطأ أثناء تفعيل الإشعارات، يرجى المحاولة مرة أخرى.');
       }
     } catch (error) {

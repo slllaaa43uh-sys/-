@@ -8,6 +8,7 @@ import { HARAJ_CATEGORIES } from '../data/categories';
 import { API_BASE_URL } from '../constants';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getDisplayLocation } from '../data/locations';
+import { messaging, getToken, VAPID_KEY } from '../firebase-init';
 
 interface HarajViewProps {
   onFullScreenToggle: (isFull: boolean) => void;
@@ -43,8 +44,20 @@ const HarajView: React.FC<HarajViewProps> = ({ onFullScreenToggle, currentLocati
         return;
       }
       
-      const fcmToken = localStorage.getItem('fcmToken');
+      let fcmToken = localStorage.getItem('fcmToken');
       const authToken = localStorage.getItem('token');
+      
+      // إذا لم يكن fcmToken موجوداً، نحاول الحصول عليه
+      if (!fcmToken && messaging && getToken) {
+        try {
+          fcmToken = await getToken(messaging, { vapidKey: VAPID_KEY });
+          if (fcmToken) {
+            localStorage.setItem('fcmToken', fcmToken);
+          }
+        } catch (tokenError) {
+          console.error('Error getting FCM token:', tokenError);
+        }
+      }
       
       if (!fcmToken) {
         alert('جارٍ تهيئة نظام الإشعارات، يرجى المحاولة بعد قليل');
