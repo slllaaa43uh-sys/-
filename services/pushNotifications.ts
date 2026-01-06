@@ -5,22 +5,28 @@ import { Capacitor } from '@capacitor/core';
  * ============================================
  * Capacitor Push Notifications Service
  * ============================================
- * خدمة الإشعارات باستخدام Capacitor بدلاً من Firebase Web SDK
- * تعمل على iOS و Android عبر WebView
+ * SIMPLIFIED VERSION - Token Registration Only
+ * 
+ * This service ONLY handles:
+ * 1. Creating notification channel (Android)
+ * 2. Requesting permissions
+ * 3. Registering device and getting FCM token
+ * 
+ * Notification DISPLAY is handled by Native Android layer
+ * to fix FAILED BINDER TRANSACTION crash.
  */
 
-// متغير لتخزين التوكن
+// Store FCM token in memory
 let fcmToken: string | null = null;
 
-// دالة للتحقق مما إذا كنا في بيئة native (iOS/Android)
+// Check if running on native platform (iOS/Android)
 export const isNativePlatform = (): boolean => {
   return Capacitor.isNativePlatform();
 };
 
 /**
- * CRITICAL FIX: Create Android Notification Channel
- * This fixes the issue where notifications are received but not shown on Android.
- * Must be called immediately when the app launches.
+ * Create Android Notification Channel
+ * Must be called immediately when app launches.
  */
 export const createNotificationChannel = async (): Promise<void> => {
   if (!isNativePlatform()) {
@@ -32,7 +38,7 @@ export const createNotificationChannel = async (): Promise<void> => {
     await PushNotifications.createChannel({
       id: 'fcm_default_channel',
       name: 'General',
-      importance: 5, // IMPORTANCE_HIGH - shows everywhere, makes noise and peeks
+      importance: 5, // IMPORTANCE_HIGH
       description: 'General notifications',
       sound: 'default',
       visibility: 1, // VISIBILITY_PUBLIC
@@ -44,10 +50,9 @@ export const createNotificationChannel = async (): Promise<void> => {
   }
 };
 
-// دالة للتحقق من صلاحيات الإشعارات
+// Check notification permissions
 export const checkPermissions = async (): Promise<'granted' | 'denied' | 'prompt'> => {
   if (!isNativePlatform()) {
-    // في بيئة الويب، استخدم Web Notification API
     if ('Notification' in window) {
       return Notification.permission as 'granted' | 'denied' | 'prompt';
     }
@@ -58,10 +63,9 @@ export const checkPermissions = async (): Promise<'granted' | 'denied' | 'prompt
   return result.receive;
 };
 
-// دالة لطلب صلاحيات الإشعارات
+// Request notification permissions
 export const requestPermissions = async (): Promise<'granted' | 'denied' | 'prompt'> => {
   if (!isNativePlatform()) {
-    // في بيئة الويب
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
       return permission as 'granted' | 'denied' | 'prompt';
@@ -73,10 +77,13 @@ export const requestPermissions = async (): Promise<'granted' | 'denied' | 'prom
   return result.receive;
 };
 
-// دالة لتسجيل الجهاز للإشعارات والحصول على التوكن
+/**
+ * Register for push notifications and get FCM token
+ * This is the MAIN function - called ONCE on app start
+ */
 export const registerForPushNotifications = async (): Promise<string | null> => {
   try {
-    // التحقق من الصلاحيات أولاً
+    // Step 1: Check/Request permissions
     let permStatus = await checkPermissions();
     
     if (permStatus === 'prompt') {
@@ -89,15 +96,43 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
     }
     
     if (!isNativePlatform()) {
-      console.warn('⚠️ Not running on native platform, skipping Capacitor registration');
+      console.warn('⚠️ Not running on native platform, skipping registration');
       return null;
     }
     
-    // تسجيل الجهاز للإشعارات
-    await PushNotifications.register();
-    
-    // إرجاع التوكن المخزن (سيتم تحديثه عبر listener)
-    return fcmToken;
+    // Step 2: Set up ONE-TIME listener for registration token
+    // This listener will receive the FCM token after register() is called
+    return new Promise((resolve) => {
+      // Listener for successful registration
+      PushNotifications.addListener('registration', (token) => {
+        console.log('✅ FCM Token received:', token.value);
+        fcmToken = token.value;
+        localStorage.setItem('fcmToken', token.value);
+        resolve(token.value);
+      });
+      
+      // Listener for registration error
+      PushNotifications.addListener('registrationError', (error) => {
+        console.error('❌ Push registration error:', error);
+        resolve(null);
+      });
+      
+      // Step 3: Register device
+      PushNotifications.register();
+      
+      // Timeout fallback - return stored token if available
+      setTimeout(() => {
+        if (!fcmToken) {
+          const storedToken = localStorage.getItem('fcmToken');
+          if (storedToken) {
+            fcmToken = storedToken;
+            resolve(storedToken);
+          } else {
+            resolve(null);
+          }
+        }
+      }, 5000);
+    });
   } catch (error) {
     console.error('❌ Error registering for push notifications:', error);
     return null;
@@ -106,7 +141,7 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
 
 /**
  * Unregister from push notifications
- * Called when user disables notifications via the bell icon
+ * Called when user disables notifications
  */
 export const unregisterFromPushNotifications = async (): Promise<void> => {
   if (!isNativePlatform()) {
@@ -124,56 +159,7 @@ export const unregisterFromPushNotifications = async (): Promise<void> => {
   }
 };
 
-// دالة لإعداد مستمعي الإشعارات
-export const setupPushNotificationListeners = (
-  onTokenReceived: (token: string) => void,
-  onNotificationReceived?: (notification: any) => void,
-  onError?: (error: any) => void
-): void => {
-  if (!isNativePlatform()) {
-    console.log('ℹ️ Not on native platform, skipping Capacitor listeners');
-    return;
-  }
-  
-  // مستمع لاستلام التوكن عند التسجيل الناجح
-  PushNotifications.addListener('registration', (token) => {
-    console.log('✅ Push registration success, token:', token.value);
-    fcmToken = token.value;
-    localStorage.setItem('fcmToken', token.value);
-    onTokenReceived(token.value);
-  });
-  
-  // مستمع لأخطاء التسجيل
-  PushNotifications.addListener('registrationError', (error) => {
-    console.error('❌ Push registration error:', error);
-    if (onError) {
-      onError(error);
-    }
-  });
-  
-  // مستمع لاستلام الإشعارات أثناء تشغيل التطبيق
-  PushNotifications.addListener('pushNotificationReceived', (notification) => {
-    console.log('📬 Push notification received:', notification);
-    if (onNotificationReceived) {
-      onNotificationReceived(notification);
-    }
-  });
-  
-  // مستمع للنقر على الإشعار
-  PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-    console.log('👆 Push notification action performed:', action);
-    // يمكن إضافة منطق التنقل هنا
-  });
-};
-
-// دالة للحصول على التوكن المخزن
+// Get stored FCM token
 export const getStoredToken = (): string | null => {
   return fcmToken || localStorage.getItem('fcmToken');
-};
-
-// دالة لإزالة جميع المستمعين (للتنظيف)
-export const removePushNotificationListeners = async (): Promise<void> => {
-  if (isNativePlatform()) {
-    await PushNotifications.removeAllListeners();
-  }
 };

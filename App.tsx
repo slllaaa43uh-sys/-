@@ -1,11 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { messaging, onMessage } from './firebase-init';
 import { 
-  setupPushNotificationListeners, 
   registerForPushNotifications,
-  removePushNotificationListeners,
-  isNativePlatform,
   createNotificationChannel
 } from './services/pushNotifications';
 import Header from './components/Header';
@@ -106,58 +102,52 @@ const AppContent: React.FC = () => {
     initNotificationChannel();
   }, []); // Empty dependency array - runs once on mount
 
+  // ============================================
+  // TOKEN REGISTRATION ONLY - Native handles display
+  // ============================================
+  // The React app ONLY registers the FCM token and sends it to the backend.
+  // Notification DISPLAY is handled by the Native Android layer to fix BINDER TRANSACTION crash.
   useEffect(() => {
-    const initPushNotifications = async () => {
+    const registerTokenOnly = async () => {
       if (!token) return;
       
       try {
-        // إعداد مستمعي Capacitor Push Notifications
-        setupPushNotificationListeners(
-          // عند استلام التوكن
-          (fcmToken) => {
-            console.log('✅ FCM Token received via Capacitor:', fcmToken);
-            // يمكن إرسال التوكن إلى الباك إند هنا إذا لزم الأمر
-          },
-          // عند استلام إشعار أثناء تشغيل التطبيق
-          (notification) => {
-            console.log('📬 Notification received:', notification);
-            // يمكن عرض إشعار محلي أو تحديث UI
-          },
-          // عند حدوث خطأ
-          (error) => {
-            console.error('❌ Push notification error:', error);
-          }
-        );
-        
-        // تسجيل الجهاز للإشعارات
+        // Step 1: Register for push notifications and get FCM token
         const fcmToken = await registerForPushNotifications();
-        if (fcmToken) {
-          console.log('✅ Device registered for push notifications');
-        }
         
-        // إعداد مستمع Firebase للإشعارات في الويب (fallback)
-        if (!isNativePlatform() && messaging && onMessage) {
-          onMessage(messaging, (payload: any) => {
-            if (payload.notification) {
-              new Notification(payload.notification.title || 'إشعار جديد', {
-                body: payload.notification.body,
-                icon: '/logo.png'
-              });
+        if (fcmToken) {
+          console.log('✅ FCM Token obtained:', fcmToken);
+          
+          // Step 2: Send token to backend API
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/users/fcm-token`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ fcmToken })
+            });
+            
+            if (response.ok) {
+              console.log('✅ FCM Token sent to backend successfully');
+            } else {
+              console.warn('⚠️ Failed to send FCM token to backend');
             }
-          });
+          } catch (apiError) {
+            console.error('❌ Error sending FCM token to backend:', apiError);
+          }
         }
       } catch (error) {
-        console.error('خطأ في تهيئة الإشعارات:', error);
+        console.error('❌ Error registering for push notifications:', error);
       }
     };
     
-    setTimeout(initPushNotifications, 1000);
+    // Run once when app starts (with small delay to ensure app is ready)
+    const timeoutId = setTimeout(registerTokenOnly, 1000);
     
-    // تنظيف المستمعين عند إلغاء التحميل
-    return () => {
-      removePushNotificationListeners();
-    };
-  }, [token]);
+    return () => clearTimeout(timeoutId);
+  }, [token]); // Only re-run if auth token changes
 
   // --- Notification Polling Logic ---
   useEffect(() => {
