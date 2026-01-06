@@ -6,10 +6,7 @@ import {
   registerForPushNotifications,
   removePushNotificationListeners,
   isNativePlatform,
-  createNotificationChannel,
-  unregisterFromPushNotifications,
-  requestPermissions,
-  checkPermissions
+  createNotificationChannel
 } from './services/pushNotifications';
 import Header from './components/Header';
 import CreatePostBar from './components/CreatePostBar';
@@ -55,8 +52,7 @@ const AppContent: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
   const [isLocationDrawerOpen, setIsLocationDrawerOpen] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notificationsEnabled') !== 'false');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
 
   useEffect(() => {
     const metaThemeColor = document.getElementById('theme-color-meta');
@@ -114,12 +110,6 @@ const AppContent: React.FC = () => {
     const initPushNotifications = async () => {
       if (!token) return;
       
-      // Only initialize push notifications if enabled
-      if (!notificationsEnabled) {
-        console.log('ℹ️ Notifications disabled by user, skipping initialization');
-        return;
-      }
-      
       try {
         // إعداد مستمعي Capacitor Push Notifications
         setupPushNotificationListeners(
@@ -143,8 +133,6 @@ const AppContent: React.FC = () => {
         const fcmToken = await registerForPushNotifications();
         if (fcmToken) {
           console.log('✅ Device registered for push notifications');
-          setNotificationsEnabled(true);
-          localStorage.setItem('notificationsEnabled', 'true');
         }
         
         // إعداد مستمع Firebase للإشعارات في الويب (fallback)
@@ -169,7 +157,7 @@ const AppContent: React.FC = () => {
     return () => {
       removePushNotificationListeners();
     };
-  }, [token, notificationsEnabled]);
+  }, [token]);
 
   // --- Notification Polling Logic ---
   useEffect(() => {
@@ -675,50 +663,7 @@ const AppContent: React.FC = () => {
 
   const handleOpenNotifications = () => { setIsNotificationsOpen(true); setUnreadNotificationsCount(0); };
 
-  // Show toast message helper
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
 
-  // Bell Icon Toggle Handler - User-Initiated Notification Toggle
-  const handleNotificationToggle = async () => {
-    try {
-      if (!notificationsEnabled) {
-        // Currently Disabled -> Enable notifications
-        // Step 1: Request permissions
-        const permission = await requestPermissions();
-        
-        if (permission === 'granted') {
-          // Step 2: Register for push notifications
-          await registerForPushNotifications();
-          
-          // Step 3: Update state and show success toast
-          setNotificationsEnabled(true);
-          localStorage.setItem('notificationsEnabled', 'true');
-          showToast('Notifications enabled successfully ✅');
-          console.log('✅ Notifications enabled by user');
-        } else {
-          // Permission denied
-          showToast('Permission denied. Please enable in settings.');
-          console.warn('⚠️ Notification permission denied');
-        }
-      } else {
-        // Currently Enabled -> Disable notifications
-        // Step 1: Unregister from push notifications
-        await unregisterFromPushNotifications();
-        
-        // Step 2: Update state and show disabled toast
-        setNotificationsEnabled(false);
-        localStorage.setItem('notificationsEnabled', 'false');
-        showToast('Notifications disabled 🔕');
-        console.log('🔕 Notifications disabled by user');
-      }
-    } catch (error) {
-      console.error('❌ Error toggling notifications:', error);
-      showToast('Error toggling notifications');
-    }
-  };
 
   useEffect(() => {
     if (!token) return;
@@ -761,14 +706,6 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f0f2f5] dark:bg-black max-w-md mx-auto shadow-2xl overflow-hidden relative transition-colors duration-200">
-      {/* Toast Notification for Bell Icon Toggle */}
-      {toastMessage && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="bg-gray-900 text-white px-4 py-2.5 rounded-full shadow-lg text-sm font-medium">
-            {toastMessage}
-          </div>
-        </div>
-      )}
       {showWelcome && <WelcomeCelebration onClose={handleCloseWelcome} />}
       {videoUploadState.isActive && (
         <VideoUploadIndicator status={videoUploadState.status} progress={videoUploadState.progress} thumbnail={videoUploadState.thumbnail} errorMessage={videoUploadState.errorMsg} />
@@ -794,7 +731,7 @@ const AppContent: React.FC = () => {
             <div className={`h-full native-scroll no-scrollbar ${!isFullScreen ? 'pb-20' : ''}`}>
               {!isFullScreen && (
                 <div className="bg-white shadow-sm mb-2">
-                  <Header currentLocation={currentLocation} onLocationClick={() => setIsLocationDrawerOpen(true)} onNotificationsClick={handleOpenNotifications} onSettingsClick={() => setIsSettingsOpen(true)} onDiscoveryClick={() => {}} unreadCount={unreadNotificationsCount} notificationsEnabled={notificationsEnabled} onNotificationToggle={handleNotificationToggle} />
+                  <Header currentLocation={currentLocation} onLocationClick={() => setIsLocationDrawerOpen(true)} onNotificationsClick={handleOpenNotifications} onSettingsClick={() => setIsSettingsOpen(true)} onDiscoveryClick={() => {}} unreadCount={unreadNotificationsCount} />
                   <CreatePostBar onOpen={() => setIsCreateModalOpen(true)} />
                 </div>
               )}

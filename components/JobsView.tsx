@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
-  Briefcase, Users, ChevronLeft, X, ArrowRight, MapPin, Loader2, Megaphone, Bell
+  Briefcase, Users, ChevronLeft, X, ArrowRight, MapPin, Loader2, Megaphone, Bell, BellOff
 } from 'lucide-react';
 import PostCard from './PostCard';
 import { Post } from '../types';
@@ -12,7 +12,8 @@ import { getDisplayLocation } from '../data/locations';
 import { 
   registerForPushNotifications, 
   getStoredToken,
-  requestPermissions 
+  requestPermissions,
+  unregisterFromPushNotifications
 } from '../services/pushNotifications';
 
 interface JobsViewProps {
@@ -29,6 +30,18 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
   const [activeSubPage, setActiveSubPage] = useState<{ type: 'seeker' | 'employer', category: string } | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Notification toggle state - persisted in localStorage
+  const [jobsNotificationsEnabled, setJobsNotificationsEnabled] = useState(() => 
+    localStorage.getItem('jobsNotificationsEnabled') === 'true'
+  );
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Show toast helper
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   const handleSubPageSelect = (type: 'seeker' | 'employer') => {
     if (selectedCategory) {
@@ -45,60 +58,95 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
     setPosts([]);
   };
 
-  const handleSubscribeJobs = async () => {
+  // Bell Icon Toggle Handler - User-Initiated Notification Toggle for Jobs
+  const handleToggleJobsNotifications = async () => {
     try {
-      // 1. التحقق من الصلاحيات وطلبها باستخدام Capacitor
-      const permission = await requestPermissions();
-      if (permission !== 'granted') {
-        alert('يرجى السماح بالإشعارات من إعدادات التطبيق لتلقي تنبيهات الوظائف');
-        return;
-      }
-      
-      // 2. الحصول على التوكن باستخدام Capacitor
-      let fcmToken = getStoredToken();
-      const authToken = localStorage.getItem('token');
-      
-      // إذا لم يكن fcmToken موجوداً، نحاول التسجيل للحصول عليه
-      if (!fcmToken) {
-        try {
-          fcmToken = await registerForPushNotifications();
-        } catch (tokenError) {
-          console.error('Error getting FCM token:', tokenError);
+      if (!jobsNotificationsEnabled) {
+        // Currently Disabled -> Enable notifications
+        // Step 1: Request permissions
+        const permission = await requestPermissions();
+        if (permission !== 'granted') {
+          showToast(language === 'ar' ? 'يرجى السماح بالإشعارات من الإعدادات' : 'Please enable notifications in settings');
+          return;
         }
-      }
-      
-      if (!fcmToken) {
-        alert('جارٍ تهيئة نظام الإشعارات، يرجى المحاولة بعد قليل');
-        return;
-      }
-      
-      if (!authToken) {
-        alert('يرجى تسجيل الدخول أولاً لتفعيل التنبيهات');
-        return;
-      }
-      
-      // 3. إرسال الاشتراك إلى الباك إند
-      const response = await fetch(`${API_BASE_URL}/api/v1/fcm/subscribe`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          deviceToken: fcmToken,
-          topic: 'jobs',
-          subTopic: activeSubPage ? activeSubPage.type : 'all'
-        })
-      });
-      
-      if (response.ok) {
-        alert('✅ تم تفعيل إشعارات الوظائف بنجاح! ستصلك تنبيهات عند توفر وظائف جديدة.');
+        
+        // Step 2: Get FCM token
+        let fcmToken = getStoredToken();
+        const authToken = localStorage.getItem('token');
+        
+        if (!fcmToken) {
+          try {
+            fcmToken = await registerForPushNotifications();
+          } catch (tokenError) {
+            console.error('Error getting FCM token:', tokenError);
+          }
+        }
+        
+        if (!fcmToken) {
+          showToast(language === 'ar' ? 'جارٍ تهيئة الإشعارات، حاول مرة أخرى' : 'Initializing notifications, try again');
+          return;
+        }
+        
+        if (!authToken) {
+          showToast(language === 'ar' ? 'يرجى تسجيل الدخول أولاً' : 'Please login first');
+          return;
+        }
+        
+        // Step 3: Subscribe to jobs topic
+        const response = await fetch(`${API_BASE_URL}/api/v1/fcm/subscribe`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            deviceToken: fcmToken,
+            topic: 'jobs',
+            subTopic: activeSubPage ? activeSubPage.type : 'all'
+          })
+        });
+        
+        if (response.ok) {
+          setJobsNotificationsEnabled(true);
+          localStorage.setItem('jobsNotificationsEnabled', 'true');
+          showToast(language === 'ar' ? 'تم تفعيل الإشعارات بنجاح ✅' : 'Notifications enabled successfully ✅');
+          console.log('✅ Jobs notifications enabled');
+        } else {
+          showToast(language === 'ar' ? 'حدث خطأ، حاول مرة أخرى' : 'Error, try again');
+        }
       } else {
-        alert('حدث خطأ أثناء تفعيل الإشعارات، يرجى المحاولة مرة أخرى.');
+        // Currently Enabled -> Disable notifications
+        const authToken = localStorage.getItem('token');
+        const fcmToken = getStoredToken();
+        
+        // Unsubscribe from jobs topic (optional - send to backend)
+        if (authToken && fcmToken) {
+          try {
+            await fetch(`${API_BASE_URL}/api/v1/fcm/unsubscribe`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+              },
+              body: JSON.stringify({
+                deviceToken: fcmToken,
+                topic: 'jobs'
+              })
+            });
+          } catch (error) {
+            console.log('Unsubscribe request failed, continuing with local disable');
+          }
+        }
+        
+        // Update local state
+        setJobsNotificationsEnabled(false);
+        localStorage.setItem('jobsNotificationsEnabled', 'false');
+        showToast(language === 'ar' ? 'تم إيقاف الإشعارات 🔕' : 'Notifications disabled 🔕');
+        console.log('🔕 Jobs notifications disabled');
       }
     } catch (error) {
-      console.error('Subscription error:', error);
-      alert('حدث خطأ في الاتصال');
+      console.error('❌ Error toggling jobs notifications:', error);
+      showToast(language === 'ar' ? 'حدث خطأ' : 'Error occurred');
     }
   };
 
@@ -246,6 +294,14 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
   if (activeSubPage) {
     return (
       <div className="bg-[#f0f2f5] dark:bg-black min-h-screen">
+         {/* Toast Notification */}
+         {toastMessage && (
+           <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-2 duration-300">
+             <div className="bg-gray-900 text-white px-4 py-2.5 rounded-full shadow-lg text-sm font-medium">
+               {toastMessage}
+             </div>
+           </div>
+         )}
          <div className="sticky top-0 z-50 bg-white dark:bg-[#121212] border-b border-gray-200 dark:border-gray-800 shadow-sm">
            <div className="px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -274,11 +330,11 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
               <div className="flex items-center gap-2">
                 {/* --- BELL ICON INSIDE SUB-PAGE --- */}
                 <button 
-                  onClick={handleSubscribeJobs}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-purple-600 dark:text-purple-400"
-                  title="تفعيل إشعارات هذا القسم"
+                  onClick={handleToggleJobsNotifications}
+                  className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${jobsNotificationsEnabled ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}
+                  title={jobsNotificationsEnabled ? (language === 'ar' ? 'إيقاف الإشعارات' : 'Disable notifications') : (language === 'ar' ? 'تفعيل الإشعارات' : 'Enable notifications')}
                 >
-                  <Bell size={20} strokeWidth={2} />
+                  {jobsNotificationsEnabled ? <Bell size={20} strokeWidth={2} /> : <BellOff size={20} strokeWidth={2} />}
                 </button>
 
                 <button 
@@ -328,6 +384,14 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
 
   return (
     <div className="min-h-screen bg-white dark:bg-black">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="bg-gray-900 text-white px-4 py-2.5 rounded-full shadow-lg text-sm font-medium">
+            {toastMessage}
+          </div>
+        </div>
+      )}
       <div className="bg-white dark:bg-[#121212] sticky top-0 z-10 shadow-sm border-b border-gray-100 dark:border-gray-800">
         <div className="px-4 py-4 flex items-center justify-between bg-gradient-to-l from-purple-50 to-white dark:from-gray-900 dark:to-black">
            <div className="flex items-center gap-3">
@@ -343,11 +407,11 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
            <div className="flex items-center gap-2">
              {/* --- BELL ICON IN MAIN JOBS HEADER --- */}
              <button 
-               onClick={handleSubscribeJobs}
-               className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
-               title="تفعيل إشعارات الوظائف"
+               onClick={handleToggleJobsNotifications}
+               className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${jobsNotificationsEnabled ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}
+               title={jobsNotificationsEnabled ? (language === 'ar' ? 'إيقاف إشعارات الوظائف' : 'Disable job notifications') : (language === 'ar' ? 'تفعيل إشعارات الوظائف' : 'Enable job notifications')}
              >
-               <Bell size={20} strokeWidth={2} />
+               {jobsNotificationsEnabled ? <Bell size={20} strokeWidth={2} /> : <BellOff size={20} strokeWidth={2} />}
              </button>
 
              <button 
