@@ -4,6 +4,8 @@ import {
   registerForPushNotifications,
   createNotificationChannel
 } from './services/pushNotifications';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { Capacitor } from '@capacitor/core';
 import Header from './components/Header';
 import CreatePostBar from './components/CreatePostBar';
 import Stories from './components/Stories';
@@ -148,6 +150,75 @@ const AppContent: React.FC = () => {
     
     return () => clearTimeout(timeoutId);
   }, [token]); // Only re-run if auth token changes
+
+  // ============================================
+  // NOTIFICATION CLICK HANDLER
+  // ============================================
+  // Handle when user clicks on a push notification
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const setupNotificationClickListener = async () => {
+      try {
+        await PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+          console.log('🔔 Notification clicked:', notification);
+          
+          const data = notification.notification?.data;
+          if (!data) return;
+
+          // Extract navigation info from notification data
+          const postId = data.postId || data.post_id;
+          const videoId = data.videoId || data.video_id;
+          const userId = data.userId || data.user_id;
+          const type = data.type || data.category;
+          const url = data.url;
+
+          // Navigate based on notification type
+          if (url) {
+            // If URL is provided, parse and navigate
+            if (url.includes('/jobs/') || url.includes('/haraj/')) {
+              const id = url.split('/').pop();
+              if (id) {
+                setSelectedNotification({ category: 'post', postId: id });
+              }
+            } else if (url.includes('/shorts/') || url.includes('/video/')) {
+              const id = url.split('/').pop();
+              if (id) {
+                setSelectedNotification({ category: 'video', videoId: id });
+              }
+            } else if (url.includes('/profile/')) {
+              const id = url.split('/').pop();
+              if (id) {
+                setViewingProfileId(id);
+              }
+            }
+          } else if (postId) {
+            // Navigate to post detail
+            setSelectedNotification({ category: 'post', postId });
+          } else if (videoId) {
+            // Navigate to video detail
+            setSelectedNotification({ category: 'video', videoId });
+          } else if (userId) {
+            // Navigate to user profile
+            setViewingProfileId(userId);
+          } else if (type === 'post' || type === 'jobs' || type === 'haraj') {
+            // Open notifications view
+            setIsNotificationsOpen(true);
+          }
+        });
+        console.log('✅ Notification click listener added');
+      } catch (error) {
+        console.error('❌ Error setting up notification click listener:', error);
+      }
+    };
+
+    setupNotificationClickListener();
+
+    // Cleanup listener on unmount
+    return () => {
+      PushNotifications.removeAllListeners();
+    };
+  }, []);
 
   // --- Notification Polling Logic ---
   useEffect(() => {
