@@ -4,6 +4,8 @@
  * ============================================
  * هذا الملف مسؤول عن استقبال الإشعارات عندما يكون التطبيق مغلقاً
  * يجب أن يكون في مجلد public/
+ * 
+ * Updated: January 8, 2026 - New Firebase Project (mehnati-d7ab9)
  */
 
 // استيراد مكتبات Firebase
@@ -12,13 +14,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-comp
 
 // إعدادات Firebase (نفس الإعدادات في firebase-init.ts)
 const firebaseConfig = {
-  apiKey: "AIzaSyD08yfFqO32HBSU9SLxFx2UuPvkVdEhMWY",
-  authDomain: "mihnty-e94ca.firebaseapp.com",
-  projectId: "mihnty-e94ca",
-  storageBucket: "mihnty-e94ca.firebasestorage.app",
-  messagingSenderId: "123005243140",
-  appId: "1:123005243140:web:7ba255ae7bcb25ccd58a51",
-  measurementId: "G-E0QRH2YWPC"
+  apiKey: "AIzaSyBvveNXHmdO_j07dHwyLAiLOj1pxsmbjaQ",
+  authDomain: "mehnati-d7ab9.firebaseapp.com",
+  projectId: "mehnati-d7ab9",
+  storageBucket: "mehnati-d7ab9.firebasestorage.app",
+  messagingSenderId: "951669845862",
+  appId: "1:951669845862:web:6c1939f1d4e6c394eda2a7"
 };
 
 // تهيئة Firebase في Service Worker

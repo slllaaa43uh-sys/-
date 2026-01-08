@@ -9,21 +9,22 @@ import { getMessaging, onMessage } from 'firebase/messaging';
  * 
  * ملاحظة: تم إزالة getToken لأننا نستخدم Capacitor Push Notifications
  * للحصول على التوكن في بيئة WebView (iOS/Android)
+ * 
+ * Updated: January 8, 2026 - New Firebase Project (mehnati-d7ab9)
  */
 
 // إعدادات Firebase - تُقرأ من متغيرات البيئة
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyD08yfFqO32HBSU9SLxFx2UuPvkVdEhMWY",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "mihnty-e94ca.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mihnty-e94ca",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "mihnty-e94ca.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123005243140",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123005243140:web:7ba255ae7bcb25ccd58a51",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-E0QRH2YWPC"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBvveNXHmdO_j07dHwyLAiLOj1pxsmbjaQ",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "mehnati-d7ab9.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mehnati-d7ab9",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "mehnati-d7ab9.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "951669845862",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:951669845862:web:6c1939f1d4e6c394eda2a7"
 };
 
 // VAPID Key للإشعارات (يُستخدم فقط في بيئة الويب إذا لزم الأمر)
-export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "sTw8qpWfiNulXC_NsqZhwhIXOfeUs65sYLiyCb8fpsY";
+export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "";
 
 let app: any = null;
 let messaging: any = null;
