@@ -2,151 +2,145 @@
  * ============================================
  * Badge Counter Service
  * ============================================
- * Manages badge counters for Jobs and Haraj sections
- * 
- * Rules:
- * - Counters only increase (never decrease automatically)
- * - Counters decrease only when user deletes their own post
- * - Counters persist in localStorage
- * - Real-time updates via push notifications
+ * Fetches and manages post counts for Jobs and Haraj sections
+ * Shows actual number of posts in each category (like Marjan app)
  */
 
-// Storage keys
-const STORAGE_KEYS = {
-  JOBS_SEEKER: 'badge_jobs_seeker',
-  JOBS_EMPLOYER: 'badge_jobs_employer',
-  HARAJ_ALL: 'badge_haraj_all',
-  JOBS_TOTAL: 'badge_jobs_total',
-  HARAJ_TOTAL: 'badge_haraj_total',
-  // Per-category keys will be dynamically generated
-};
+import { API_BASE_URL } from '../constants';
 
-// Get badge count from localStorage
-export const getBadgeCount = (key: string): number => {
-  const value = localStorage.getItem(key);
-  return value ? parseInt(value, 10) : 0;
-};
+// Types
+interface JobCategoryCounts {
+  seeker: number;
+  employer: number;
+  total: number;
+}
 
-// Set badge count in localStorage
-export const setBadgeCount = (key: string, count: number): void => {
-  localStorage.setItem(key, String(Math.max(0, count)));
-  // Dispatch custom event for real-time updates
-  window.dispatchEvent(new CustomEvent('badgeCountUpdated', { 
-    detail: { key, count: Math.max(0, count) } 
-  }));
-};
+interface PostCountsData {
+  jobs: {
+    total: number;
+    seeker: number;
+    employer: number;
+    categories: Record<string, JobCategoryCounts>;
+  };
+  haraj: {
+    total: number;
+    categories: Record<string, number>;
+  };
+}
 
-// Increment badge count
-export const incrementBadgeCount = (key: string, amount: number = 1): void => {
-  const current = getBadgeCount(key);
-  setBadgeCount(key, current + amount);
-};
+// Cache for post counts
+let cachedCounts: PostCountsData | null = null;
+let lastFetchTime: number = 0;
+const CACHE_DURATION = 30000; // 30 seconds cache
 
-// Decrement badge count (only when user deletes their own post)
-export const decrementBadgeCount = (key: string, amount: number = 1): void => {
-  const current = getBadgeCount(key);
-  setBadgeCount(key, Math.max(0, current - amount));
-};
-
-// Get total jobs badge count
-export const getJobsTotalBadge = (): number => {
-  return getBadgeCount(STORAGE_KEYS.JOBS_TOTAL);
-};
-
-// Get total haraj badge count
-export const getHarajTotalBadge = (): number => {
-  return getBadgeCount(STORAGE_KEYS.HARAJ_TOTAL);
-};
-
-// Get jobs seeker badge count
-export const getJobsSeekerBadge = (): number => {
-  return getBadgeCount(STORAGE_KEYS.JOBS_SEEKER);
-};
-
-// Get jobs employer badge count
-export const getJobsEmployerBadge = (): number => {
-  return getBadgeCount(STORAGE_KEYS.JOBS_EMPLOYER);
-};
-
-// Increment jobs badge (called when notification received)
-export const incrementJobsBadge = (type: 'seeker' | 'employer'): void => {
-  if (type === 'seeker') {
-    incrementBadgeCount(STORAGE_KEYS.JOBS_SEEKER);
-  } else {
-    incrementBadgeCount(STORAGE_KEYS.JOBS_EMPLOYER);
-  }
-  incrementBadgeCount(STORAGE_KEYS.JOBS_TOTAL);
-};
-
-// Increment haraj badge (called when notification received)
-export const incrementHarajBadge = (category?: string): void => {
-  incrementBadgeCount(STORAGE_KEYS.HARAJ_TOTAL);
-  if (category) {
-    incrementBadgeCount(`badge_haraj_${category}`);
-  }
-};
-
-// Decrement jobs badge (called when user deletes their own post)
-export const decrementJobsBadge = (type: 'seeker' | 'employer'): void => {
-  if (type === 'seeker') {
-    decrementBadgeCount(STORAGE_KEYS.JOBS_SEEKER);
-  } else {
-    decrementBadgeCount(STORAGE_KEYS.JOBS_EMPLOYER);
-  }
-  decrementBadgeCount(STORAGE_KEYS.JOBS_TOTAL);
-};
-
-// Decrement haraj badge (called when user deletes their own post)
-export const decrementHarajBadge = (category?: string): void => {
-  decrementBadgeCount(STORAGE_KEYS.HARAJ_TOTAL);
-  if (category) {
-    decrementBadgeCount(`badge_haraj_${category}`);
-  }
-};
-
-// Process incoming notification and update badges
-export const processNotificationForBadge = (data: any): void => {
-  console.log('🔔 Processing notification for badge:', data);
-  
-  const type = data.type || data.displayPage || '';
-  const category = data.category || '';
-  const postTitle = data.postTitle || '';
-  
-  // Check if it's a jobs notification
-  if (type === 'jobs' || category.includes('jobs_') || 
-      postTitle.includes('ابحث عن وظيفة') || postTitle.includes('ابحث عن موظفين')) {
-    
-    // Determine if seeker or employer
-    if (postTitle.includes('ابحث عن وظيفة') || postTitle.includes('أبحث عن وظيفة')) {
-      // Post is from job seeker -> notify employers
-      incrementJobsBadge('employer');
-      console.log('📊 Incremented jobs employer badge');
-    } else if (postTitle.includes('ابحث عن موظفين') || postTitle.includes('أبحث عن موظفين')) {
-      // Post is from employer -> notify job seekers
-      incrementJobsBadge('seeker');
-      console.log('📊 Incremented jobs seeker badge');
-    } else {
-      // Generic jobs notification
-      incrementBadgeCount(STORAGE_KEYS.JOBS_TOTAL);
-      console.log('📊 Incremented jobs total badge');
+/**
+ * Fetch post counts from API
+ */
+export const fetchPostCounts = async (): Promise<PostCountsData | null> => {
+  try {
+    // Check cache
+    const now = Date.now();
+    if (cachedCounts && (now - lastFetchTime) < CACHE_DURATION) {
+      return cachedCounts;
     }
-  }
-  // Check if it's a haraj notification
-  else if (type === 'haraj' || category.includes('haraj_')) {
-    incrementHarajBadge(category);
-    console.log('📊 Incremented haraj badge');
+
+    const response = await fetch(`${API_BASE_URL}/api/v1/posts/counts`);
+    
+    if (!response.ok) {
+      console.error('Failed to fetch post counts:', response.status);
+      return cachedCounts; // Return cached data if available
+    }
+
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      cachedCounts = result.data;
+      lastFetchTime = now;
+      
+      // Dispatch event to notify components
+      window.dispatchEvent(new CustomEvent('postCountsUpdated', { 
+        detail: result.data 
+      }));
+      
+      return result.data;
+    }
+    
+    return cachedCounts;
+  } catch (error) {
+    console.error('Error fetching post counts:', error);
+    return cachedCounts;
   }
 };
 
-// Hook to listen for badge updates
-export const useBadgeListener = (callback: (key: string, count: number) => void): void => {
-  if (typeof window !== 'undefined') {
-    const handler = (event: CustomEvent) => {
-      callback(event.detail.key, event.detail.count);
-    };
-    window.addEventListener('badgeCountUpdated', handler as EventListener);
-  }
+/**
+ * Get jobs total count
+ */
+export const getJobsTotalCount = (): number => {
+  return cachedCounts?.jobs?.total || 0;
 };
 
-// Export storage keys for external use
-export { STORAGE_KEYS };
+/**
+ * Get jobs seeker count (ابحث عن وظيفة)
+ */
+export const getJobsSeekerCount = (): number => {
+  return cachedCounts?.jobs?.seeker || 0;
+};
+
+/**
+ * Get jobs employer count (ابحث عن موظفين)
+ */
+export const getJobsEmployerCount = (): number => {
+  return cachedCounts?.jobs?.employer || 0;
+};
+
+/**
+ * Get haraj total count
+ */
+export const getHarajTotalCount = (): number => {
+  return cachedCounts?.haraj?.total || 0;
+};
+
+/**
+ * Get job category counts
+ */
+export const getJobCategoryCounts = (category: string): JobCategoryCounts => {
+  return cachedCounts?.jobs?.categories?.[category] || { seeker: 0, employer: 0, total: 0 };
+};
+
+/**
+ * Get haraj category count
+ */
+export const getHarajCategoryCount = (category: string): number => {
+  return cachedCounts?.haraj?.categories?.[category] || 0;
+};
+
+/**
+ * Get all cached counts
+ */
+export const getCachedCounts = (): PostCountsData | null => {
+  return cachedCounts;
+};
+
+/**
+ * Force refresh counts
+ */
+export const refreshCounts = async (): Promise<void> => {
+  lastFetchTime = 0; // Reset cache
+  await fetchPostCounts();
+};
+
+/**
+ * Initialize and start auto-refresh
+ */
+export const initPostCountService = (): void => {
+  // Fetch immediately
+  fetchPostCounts();
+  
+  // Auto-refresh every 30 seconds
+  setInterval(() => {
+    fetchPostCounts();
+  }, CACHE_DURATION);
+};
+
+// Export types
+export type { PostCountsData, JobCategoryCounts };

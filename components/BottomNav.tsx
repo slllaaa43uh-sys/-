@@ -2,7 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Briefcase, Store, PlaySquare, Plus } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { getJobsTotalBadge, getHarajTotalBadge, STORAGE_KEYS } from '../services/badgeCounterService';
+import { 
+  fetchPostCounts, 
+  getJobsTotalCount, 
+  getHarajTotalCount,
+  initPostCountService 
+} from '../services/badgeCounterService';
 
 interface BottomNavProps {
   activeTab: string;
@@ -31,30 +36,41 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab, onOpenCr
   const isShorts = activeTab === 'shorts';
 
   // Badge states
-  const [jobsBadge, setJobsBadge] = useState(() => getJobsTotalBadge());
-  const [harajBadge, setHarajBadge] = useState(() => getHarajTotalBadge());
+  const [jobsBadge, setJobsBadge] = useState(0);
+  const [harajBadge, setHarajBadge] = useState(0);
 
-  // Listen for badge updates
+  // Fetch counts on mount and listen for updates
   useEffect(() => {
-    const handleBadgeUpdate = (event: CustomEvent) => {
-      const { key, count } = event.detail;
-      if (key === STORAGE_KEYS.JOBS_TOTAL) {
-        setJobsBadge(count);
-      } else if (key === STORAGE_KEYS.HARAJ_TOTAL) {
-        setHarajBadge(count);
-      }
+    // Initialize service
+    initPostCountService();
+
+    // Update counts from cache
+    const updateCounts = () => {
+      setJobsBadge(getJobsTotalCount());
+      setHarajBadge(getHarajTotalCount());
     };
 
-    window.addEventListener('badgeCountUpdated', handleBadgeUpdate as EventListener);
+    // Initial fetch
+    fetchPostCounts().then(() => {
+      updateCounts();
+    });
+
+    // Listen for updates
+    const handleCountsUpdated = () => {
+      updateCounts();
+    };
+
+    window.addEventListener('postCountsUpdated', handleCountsUpdated);
     
-    // Also check on interval for any missed updates
+    // Also refresh on interval
     const interval = setInterval(() => {
-      setJobsBadge(getJobsTotalBadge());
-      setHarajBadge(getHarajTotalBadge());
-    }, 5000);
+      fetchPostCounts().then(() => {
+        updateCounts();
+      });
+    }, 30000);
 
     return () => {
-      window.removeEventListener('badgeCountUpdated', handleBadgeUpdate as EventListener);
+      window.removeEventListener('postCountsUpdated', handleCountsUpdated);
       clearInterval(interval);
     };
   }, []);

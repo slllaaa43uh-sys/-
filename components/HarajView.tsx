@@ -13,7 +13,10 @@ import {
   getStoredToken,
   requestPermissions
 } from '../services/pushNotifications';
-import { getHarajTotalBadge, STORAGE_KEYS } from '../services/badgeCounterService';
+import { 
+  fetchPostCounts, 
+  getHarajCategoryCount 
+} from '../services/badgeCounterService';
 
 interface HarajViewProps {
   onFullScreenToggle: (isFull: boolean) => void;
@@ -80,6 +83,46 @@ const HarajView: React.FC<HarajViewProps> = ({ onFullScreenToggle, currentLocati
   });
   
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // ============================================
+  // Badge Counter States - Actual post counts from API
+  // ============================================
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+
+  // Fetch post counts from API
+  useEffect(() => {
+    const updateCounts = () => {
+      const counts: Record<string, number> = {};
+      HARAJ_CATEGORIES.forEach(cat => {
+        counts[cat.name] = getHarajCategoryCount(cat.name);
+      });
+      setCategoryCounts(counts);
+    };
+
+    // Initial fetch
+    fetchPostCounts().then(() => {
+      updateCounts();
+    });
+
+    // Listen for updates
+    const handleCountsUpdated = () => {
+      updateCounts();
+    };
+
+    window.addEventListener('postCountsUpdated', handleCountsUpdated);
+    
+    // Refresh on interval
+    const interval = setInterval(() => {
+      fetchPostCounts().then(() => {
+        updateCounts();
+      });
+    }, 30000);
+
+    return () => {
+      window.removeEventListener('postCountsUpdated', handleCountsUpdated);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Show toast helper
   const showToast = (message: string) => {
@@ -462,21 +505,29 @@ const HarajView: React.FC<HarajViewProps> = ({ onFullScreenToggle, currentLocati
       </div>
 
       <div className="flex flex-col gap-[1px] bg-gray-100 dark:bg-gray-800 mt-1">
-        {HARAJ_CATEGORIES.map((cat, idx) => (
-          <div 
-            key={idx}
-            onClick={() => handleCategoryClick(cat.name)}
-            className="flex items-center justify-between p-3 bg-white dark:bg-[#121212] hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 cursor-pointer transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`${cat.color} p-2 rounded-lg shadow-sm dark:opacity-80`}>
-                <cat.icon size={20} className="text-white" />
+        {HARAJ_CATEGORIES.map((cat, idx) => {
+          const catCount = categoryCounts[cat.name] || 0;
+          return (
+            <div 
+              key={idx}
+              onClick={() => handleCategoryClick(cat.name)}
+              className="flex items-center justify-between p-3 bg-white dark:bg-[#121212] hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`${cat.color} p-2 rounded-lg shadow-sm dark:opacity-80 relative`}>
+                  <cat.icon size={20} className="text-white" />
+                  {catCount > 0 && (
+                    <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-orange-600 rounded-full flex items-center justify-center px-1" style={{ fontSize: '9px', fontWeight: 'bold', color: 'white' }}>
+                      {catCount > 99 ? '99+' : catCount}
+                    </div>
+                  )}
+                </div>
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{t(cat.name)}</span>
               </div>
-              <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{t(cat.name)}</span>
+              <ChevronLeft size={18} className={`text-gray-300 ${language === 'en' ? 'rotate-180' : ''}`} />
             </div>
-            <ChevronLeft size={18} className={`text-gray-300 ${language === 'en' ? 'rotate-180' : ''}`} />
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

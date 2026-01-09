@@ -14,7 +14,13 @@ import {
   getStoredToken,
   requestPermissions
 } from '../services/pushNotifications';
-import { getJobsSeekerBadge, getJobsEmployerBadge, STORAGE_KEYS } from '../services/badgeCounterService';
+import { 
+  fetchPostCounts, 
+  getJobsSeekerCount, 
+  getJobsEmployerCount,
+  getJobCategoryCounts,
+  PostCountsData 
+} from '../services/badgeCounterService';
 
 interface JobsViewProps {
   onFullScreenToggle: (isFull: boolean) => void;
@@ -86,32 +92,47 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // ============================================
-  // Badge Counter States
+  // Badge Counter States - Actual post counts from API
   // ============================================
-  const [seekerBadge, setSeekerBadge] = useState(() => getJobsSeekerBadge());
-  const [employerBadge, setEmployerBadge] = useState(() => getJobsEmployerBadge());
+  const [seekerBadge, setSeekerBadge] = useState(0);
+  const [employerBadge, setEmployerBadge] = useState(0);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, { seeker: number; employer: number; total: number }>>({});
 
-  // Listen for badge updates
+  // Fetch post counts from API
   useEffect(() => {
-    const handleBadgeUpdate = (event: CustomEvent) => {
-      const { key, count } = event.detail;
-      if (key === STORAGE_KEYS.JOBS_SEEKER) {
-        setSeekerBadge(count);
-      } else if (key === STORAGE_KEYS.JOBS_EMPLOYER) {
-        setEmployerBadge(count);
-      }
+    const updateCounts = () => {
+      setSeekerBadge(getJobsSeekerCount());
+      setEmployerBadge(getJobsEmployerCount());
+      
+      // Update category counts
+      const counts: Record<string, { seeker: number; employer: number; total: number }> = {};
+      JOB_CATEGORIES.forEach(cat => {
+        counts[cat.name] = getJobCategoryCounts(cat.name);
+      });
+      setCategoryCounts(counts);
     };
 
-    window.addEventListener('badgeCountUpdated', handleBadgeUpdate as EventListener);
+    // Initial fetch
+    fetchPostCounts().then(() => {
+      updateCounts();
+    });
+
+    // Listen for updates
+    const handleCountsUpdated = () => {
+      updateCounts();
+    };
+
+    window.addEventListener('postCountsUpdated', handleCountsUpdated);
     
-    // Check on interval for any missed updates
+    // Refresh on interval
     const interval = setInterval(() => {
-      setSeekerBadge(getJobsSeekerBadge());
-      setEmployerBadge(getJobsEmployerBadge());
-    }, 5000);
+      fetchPostCounts().then(() => {
+        updateCounts();
+      });
+    }, 30000);
 
     return () => {
-      window.removeEventListener('badgeCountUpdated', handleBadgeUpdate as EventListener);
+      window.removeEventListener('postCountsUpdated', handleCountsUpdated);
       clearInterval(interval);
     };
   }, []);
@@ -511,21 +532,29 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
       </div>
 
       <div className="flex flex-col gap-[1px] bg-gray-100 dark:bg-gray-800 mt-1">
-        {JOB_CATEGORIES.map((cat, idx) => (
+        {JOB_CATEGORIES.map((cat, idx) => {
+          const catCount = categoryCounts[cat.name]?.total || 0;
+          return (
           <div 
             key={idx}
             onClick={() => setSelectedCategory(cat.name)}
             className="flex items-center justify-between p-3 bg-white dark:bg-[#121212] hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 cursor-pointer transition-colors"
           >
             <div className="flex items-center gap-3">
-              <div className={`${cat.bg} p-2 rounded-lg shadow-sm dark:opacity-80`}>
+              <div className={`${cat.bg} p-2 rounded-lg shadow-sm dark:opacity-80 relative`}>
                 <cat.icon size={20} className={cat.color} />
+                {catCount > 0 && (
+                  <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-purple-600 rounded-full flex items-center justify-center px-1" style={{ fontSize: '9px', fontWeight: 'bold', color: 'white' }}>
+                    {catCount > 99 ? '99+' : catCount}
+                  </div>
+                )}
               </div>
               <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{t(cat.name)}</span>
             </div>
             <ChevronLeft size={18} className={`text-gray-300 ${language === 'en' ? 'rotate-180' : ''}`} />
           </div>
-        ))}
+        );
+        })}
       </div>
 
       {selectedCategory && createPortal(
@@ -538,41 +567,50 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
               </div>
               
               <div className="space-y-3">
-                 <button 
-                   onClick={() => handleSubPageSelect('employer')}
-                   className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group"
-                 >
-                    <div className="flex items-center gap-3">
-                       <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-full text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform relative">
-                          <Users size={20} />
-                          {seekerBadge > 0 && (
-                            <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-purple-600 rounded-full flex items-center justify-center px-1" style={{ fontSize: '9px', fontWeight: 'bold', color: 'white' }}>
-                              {seekerBadge > 99 ? '99+' : seekerBadge}
-                            </div>
-                          )}
-                       </div>
-                       <span className="font-bold text-gray-700 dark:text-gray-200">{t('jobs_seeker')}</span>
-                    </div>
-                    <ChevronLeft size={18} className={`text-gray-300 group-hover:text-purple-500 ${language === 'en' ? 'rotate-180' : ''}`} />
-                 </button>
+                 {(() => {
+                   const selectedCatCounts = selectedCategory ? categoryCounts[selectedCategory] : { seeker: 0, employer: 0 };
+                   const catSeekerCount = selectedCatCounts?.seeker || 0;
+                   const catEmployerCount = selectedCatCounts?.employer || 0;
+                   return (
+                     <>
+                       <button 
+                         onClick={() => handleSubPageSelect('employer')}
+                         className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group"
+                       >
+                          <div className="flex items-center gap-3">
+                             <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-full text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform relative">
+                                <Users size={20} />
+                                {catSeekerCount > 0 && (
+                                  <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-purple-600 rounded-full flex items-center justify-center px-1" style={{ fontSize: '9px', fontWeight: 'bold', color: 'white' }}>
+                                    {catSeekerCount > 99 ? '99+' : catSeekerCount}
+                                  </div>
+                                )}
+                             </div>
+                             <span className="font-bold text-gray-700 dark:text-gray-200">{t('jobs_seeker')}</span>
+                          </div>
+                          <ChevronLeft size={18} className={`text-gray-300 group-hover:text-purple-500 ${language === 'en' ? 'rotate-180' : ''}`} />
+                       </button>
 
-                 <button 
-                   onClick={() => handleSubPageSelect('seeker')}
-                   className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
-                 >
-                    <div className="flex items-center gap-3">
-                       <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform relative">
-                          <Briefcase size={20} />
-                          {employerBadge > 0 && (
-                            <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-blue-600 rounded-full flex items-center justify-center px-1" style={{ fontSize: '9px', fontWeight: 'bold', color: 'white' }}>
-                              {employerBadge > 99 ? '99+' : employerBadge}
-                            </div>
-                          )}
-                       </div>
-                       <span className="font-bold text-gray-700 dark:text-gray-200">{t('jobs_employer')}</span>
-                    </div>
-                    <ChevronLeft size={18} className={`text-gray-300 group-hover:text-blue-500 ${language === 'en' ? 'rotate-180' : ''}`} />
-                 </button>
+                       <button 
+                         onClick={() => handleSubPageSelect('seeker')}
+                         className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
+                       >
+                          <div className="flex items-center gap-3">
+                             <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform relative">
+                                <Briefcase size={20} />
+                                {catEmployerCount > 0 && (
+                                  <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-blue-600 rounded-full flex items-center justify-center px-1" style={{ fontSize: '9px', fontWeight: 'bold', color: 'white' }}>
+                                    {catEmployerCount > 99 ? '99+' : catEmployerCount}
+                                  </div>
+                                )}
+                             </div>
+                             <span className="font-bold text-gray-700 dark:text-gray-200">{t('jobs_employer')}</span>
+                          </div>
+                          <ChevronLeft size={18} className={`text-gray-300 group-hover:text-blue-500 ${language === 'en' ? 'rotate-180' : ''}`} />
+                       </button>
+                     </>
+                   );
+                 })()}
               </div>
            </div>
         </div>,
