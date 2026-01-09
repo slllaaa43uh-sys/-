@@ -213,7 +213,7 @@ const AppContent: React.FC = () => {
             if (url.includes('/jobs/') || url.includes('/haraj/')) {
               const id = url.split('/').pop();
               if (id) {
-                setSelectedNotification({ category: 'post', postId: id });
+                setSelectedNotification({ category: 'post', targetId: id });
               }
             } else if (url.includes('/shorts/') || url.includes('/video/')) {
               const id = url.split('/').pop();
@@ -227,8 +227,8 @@ const AppContent: React.FC = () => {
               }
             }
           } else if (postId) {
-            // Navigate to post detail
-            setSelectedNotification({ category: 'post', postId });
+            // Navigate to post detail - use targetId for PostDetailView
+            setSelectedNotification({ category: 'post', targetId: postId });
           } else if (videoId) {
             // Navigate to video detail
             setSelectedNotification({ category: 'video', videoId });
