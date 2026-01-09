@@ -105,6 +105,67 @@ const AppContent: React.FC = () => {
   }, []); // Empty dependency array - runs once on mount
 
   // ============================================
+  // HANDLE NOTIFICATION CLICK FROM URL PARAMS
+  // ============================================
+  // When app opens from notification click, check URL for postId/videoId
+  useEffect(() => {
+    const handleNotificationFromUrl = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const notification = urlParams.get('notification');
+      const postId = urlParams.get('postId');
+      const videoId = urlParams.get('videoId');
+      
+      console.log('🔔 Checking URL params:', { notification, postId, videoId });
+      
+      if (notification === 'post' && postId) {
+        console.log('📱 Opening post from notification URL:', postId);
+        setSelectedNotification({ category: 'post', targetId: postId });
+        // Clean URL after handling
+        window.history.replaceState({}, '', '/');
+      } else if (notification === 'video' && videoId) {
+        console.log('📱 Opening video from notification URL:', videoId);
+        setSelectedNotification({ category: 'video', targetId: videoId });
+        // Clean URL after handling
+        window.history.replaceState({}, '', '/');
+      }
+    };
+    
+    // Check on app load (after splash screen)
+    if (!showSplash && token) {
+      handleNotificationFromUrl();
+    }
+  }, [showSplash, token]);
+
+  // ============================================
+  // HANDLE SERVICE WORKER MESSAGE (NOTIFICATION CLICK)
+  // ============================================
+  // When notification is clicked while app is open, Service Worker sends a message
+  useEffect(() => {
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      console.log('📩 Received message from Service Worker:', event.data);
+      
+      if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
+        const { postId, videoId } = event.data.data;
+        
+        if (postId) {
+          console.log('📱 Opening post from SW message:', postId);
+          setSelectedNotification({ category: 'post', targetId: postId });
+        } else if (videoId) {
+          console.log('📱 Opening video from SW message:', videoId);
+          setSelectedNotification({ category: 'video', targetId: videoId });
+        }
+      }
+    };
+    
+    // Listen for messages from Service Worker
+    navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage);
+    
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage);
+    };
+  }, []);
+
+  // ============================================
   // TOKEN REGISTRATION ONLY - Native handles display
   // ============================================
   // The React app ONLY registers the FCM token and sends it to the backend.

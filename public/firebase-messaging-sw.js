@@ -61,6 +61,7 @@ messaging.onBackgroundMessage((payload) => {
  */
 self.addEventListener('notificationclick', (event) => {
   console.log('👆 [Service Worker] تم النقر على الإشعار:', event);
+  console.log('👆 [Service Worker] بيانات الإشعار:', event.notification.data);
   
   // إغلاق الإشعار
   event.notification.close();
@@ -70,21 +71,42 @@ self.addEventListener('notificationclick', (event) => {
     return;
   }
   
+  // استخراج بيانات الإشعار
+  const data = event.notification.data || {};
+  const postId = data.postId || data.post_id;
+  const videoId = data.videoId || data.video_id;
+  const type = data.type || data.category;
+  
+  // بناء URL مع بيانات الإشعار
+  let targetUrl = '/';
+  if (postId) {
+    targetUrl = `/?notification=post&postId=${postId}`;
+  } else if (videoId) {
+    targetUrl = `/?notification=video&videoId=${videoId}`;
+  }
+  
+  console.log('📱 [Service Worker] سيتم فتح:', targetUrl);
+  
   // فتح التطبيق أو التركيز عليه
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // إذا كان التطبيق مفتوحاً، ركز عليه
+        // إذا كان التطبيق مفتوحاً، أرسل رسالة له
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
-            console.log('📱 التطبيق مفتوح، جاري التركيز عليه');
+            console.log('📱 التطبيق مفتوح، جاري إرسال بيانات الإشعار');
+            // إرسال بيانات الإشعار للتطبيق
+            client.postMessage({
+              type: 'NOTIFICATION_CLICK',
+              data: { postId, videoId, notificationType: type }
+            });
             return client.focus();
           }
         }
-        // إذا لم يكن مفتوحاً، افتح نافذة جديدة
+        // إذا لم يكن مفتوحاً، افتح نافذة جديدة مع URL يحتوي على بيانات الإشعار
         if (clients.openWindow) {
-          console.log('📱 فتح التطبيق');
-          return clients.openWindow('/');
+          console.log('📱 فتح التطبيق مع بيانات الإشعار');
+          return clients.openWindow(targetUrl);
         }
       })
   );
