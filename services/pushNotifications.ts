@@ -36,10 +36,10 @@ export const createNotificationChannel = async (): Promise<void> => {
 
   try {
     await PushNotifications.createChannel({
-      id: 'fcm_default_channel',
-      name: 'General',
+      id: 'mehnati_pro_channel_v7',
+      name: 'إشعارات مهنتي',
       importance: 5, // IMPORTANCE_HIGH
-      description: 'General notifications',
+      description: 'إشعارات الوظائف والحراج',
       sound: 'notify', // Custom sound file: res/raw/notify.mp3
       visibility: 1, // VISIBILITY_PUBLIC
       vibration: true,
