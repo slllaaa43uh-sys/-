@@ -14,6 +14,7 @@ import {
   getStoredToken,
   requestPermissions
 } from '../services/pushNotifications';
+import { getJobsSeekerBadge, getJobsEmployerBadge, STORAGE_KEYS } from '../services/badgeCounterService';
 
 interface JobsViewProps {
   onFullScreenToggle: (isFull: boolean) => void;
@@ -83,6 +84,37 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
   });
   
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // ============================================
+  // Badge Counter States
+  // ============================================
+  const [seekerBadge, setSeekerBadge] = useState(() => getJobsSeekerBadge());
+  const [employerBadge, setEmployerBadge] = useState(() => getJobsEmployerBadge());
+
+  // Listen for badge updates
+  useEffect(() => {
+    const handleBadgeUpdate = (event: CustomEvent) => {
+      const { key, count } = event.detail;
+      if (key === STORAGE_KEYS.JOBS_SEEKER) {
+        setSeekerBadge(count);
+      } else if (key === STORAGE_KEYS.JOBS_EMPLOYER) {
+        setEmployerBadge(count);
+      }
+    };
+
+    window.addEventListener('badgeCountUpdated', handleBadgeUpdate as EventListener);
+    
+    // Check on interval for any missed updates
+    const interval = setInterval(() => {
+      setSeekerBadge(getJobsSeekerBadge());
+      setEmployerBadge(getJobsEmployerBadge());
+    }, 5000);
+
+    return () => {
+      window.removeEventListener('badgeCountUpdated', handleBadgeUpdate as EventListener);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Show toast helper
   const showToast = (message: string) => {
@@ -511,8 +543,13 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
                    className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group"
                  >
                     <div className="flex items-center gap-3">
-                       <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-full text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform">
+                       <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-full text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform relative">
                           <Users size={20} />
+                          {seekerBadge > 0 && (
+                            <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-purple-600 rounded-full flex items-center justify-center px-1" style={{ fontSize: '9px', fontWeight: 'bold', color: 'white' }}>
+                              {seekerBadge > 99 ? '99+' : seekerBadge}
+                            </div>
+                          )}
                        </div>
                        <span className="font-bold text-gray-700 dark:text-gray-200">{t('jobs_seeker')}</span>
                     </div>
@@ -524,8 +561,13 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
                    className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
                  >
                     <div className="flex items-center gap-3">
-                       <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                       <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform relative">
                           <Briefcase size={20} />
+                          {employerBadge > 0 && (
+                            <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-blue-600 rounded-full flex items-center justify-center px-1" style={{ fontSize: '9px', fontWeight: 'bold', color: 'white' }}>
+                              {employerBadge > 99 ? '99+' : employerBadge}
+                            </div>
+                          )}
                        </div>
                        <span className="font-bold text-gray-700 dark:text-gray-200">{t('jobs_employer')}</span>
                     </div>

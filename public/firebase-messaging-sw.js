@@ -52,6 +52,16 @@ messaging.onBackgroundMessage((payload) => {
     ]
   };
 
+  // إرسال رسالة للتطبيق لتحديث عداد الإشعارات (badges)
+  clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    for (const client of clientList) {
+      client.postMessage({
+        type: 'NOTIFICATION_RECEIVED',
+        data: payload.data || {}
+      });
+    }
+  });
+
   // عرض الإشعار
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });

@@ -4,6 +4,7 @@ import {
   registerForPushNotifications,
   createNotificationChannel
 } from './services/pushNotifications';
+import { processNotificationForBadge } from './services/badgeCounterService';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import Header from './components/Header';
@@ -137,7 +138,7 @@ const AppContent: React.FC = () => {
   }, [showSplash, token]);
 
   // ============================================
-  // HANDLE SERVICE WORKER MESSAGE (NOTIFICATION CLICK)
+  // HANDLE SERVICE WORKER MESSAGE (NOTIFICATION CLICK & BADGE UPDATE)
   // ============================================
   // When notification is clicked while app is open, Service Worker sends a message
   useEffect(() => {
@@ -145,7 +146,10 @@ const AppContent: React.FC = () => {
       console.log('📩 Received message from Service Worker:', event.data);
       
       if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
-        const { postId, videoId } = event.data.data;
+        const { postId, videoId, notificationType } = event.data.data;
+        
+        // Process for badge counter
+        processNotificationForBadge({ type: notificationType, postId, videoId });
         
         if (postId) {
           console.log('📱 Opening post from SW message:', postId);
@@ -154,6 +158,10 @@ const AppContent: React.FC = () => {
           console.log('📱 Opening video from SW message:', videoId);
           setSelectedNotification({ category: 'video', targetId: videoId });
         }
+      }
+      // Handle badge update from background notification
+      else if (event.data && event.data.type === 'NOTIFICATION_RECEIVED') {
+        processNotificationForBadge(event.data.data);
       }
     };
     
@@ -233,6 +241,11 @@ const AppContent: React.FC = () => {
             console.log('⚠️ Ignoring own notification - creatorId matches currentUserId');
             // Cancel the notification display (if possible)
             return;
+          }
+          
+          // Process notification for badge counter
+          if (data) {
+            processNotificationForBadge(data);
           }
           
           console.log('✅ Notification is for this user, allowing display');

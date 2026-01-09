@@ -13,6 +13,7 @@ import {
   getStoredToken,
   requestPermissions
 } from '../services/pushNotifications';
+import { getHarajTotalBadge, STORAGE_KEYS } from '../services/badgeCounterService';
 
 interface HarajViewProps {
   onFullScreenToggle: (isFull: boolean) => void;
