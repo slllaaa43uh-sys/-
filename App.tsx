@@ -255,6 +255,42 @@ const AppContent: React.FC = () => {
   }, []);
 
   // ============================================
+  // ANDROID WEBVIEW DEEP LINKING HANDLER
+  // ============================================
+  // Global function for Android to call via evaluateJavascript
+  useEffect(() => {
+    (window as any).handleNotification = (type?: string, category?: string, itemId?: string | number) => {
+      try {
+        if (!type) return;
+        
+        const id = itemId ? String(itemId) : undefined;
+        
+        if (type === 'job' || type === 'market' || type === 'post') {
+          if (id) {
+            setSelectedNotification({ category: 'post', targetId: id });
+          } else if (type === 'job') {
+            setActiveTab('jobs');
+          } else if (type === 'market') {
+            setActiveTab('haraj');
+          }
+        } else if (type === 'video' || type === 'shorts' || type === 'story') {
+          if (id) {
+            setSelectedNotification({ category: 'video', videoId: id });
+          } else {
+            setActiveTab('shorts');
+          }
+        }
+      } catch (e) {
+        // Fail silently
+      }
+    };
+    
+    return () => {
+      delete (window as any).handleNotification;
+    };
+  }, []);
+
+  // ============================================
   // NOTIFICATION CLICK HANDLER
   // ============================================
   // Handle when user clicks on a push notification
