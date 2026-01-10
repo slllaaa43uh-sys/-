@@ -298,7 +298,8 @@ const JobsView: React.FC<JobsViewProps> = ({ onFullScreenToggle, currentLocation
 
       const countryParam = currentLocation.country === 'عام' ? '' : encodeURIComponent(currentLocation.country);
       const cityParam = currentLocation.city ? encodeURIComponent(currentLocation.city) : '';
-      const postTypeValue = activeSubPage.type === 'seeker' ? 'ابحث عن وظيفة' : 'ابحث عن موظفين';
+      // عكس المنطق: قسم "ابحث عن وظيفة" يعرض منشورات "ابحث عن موظفين" والعكس
+      const postTypeValue = activeSubPage.type === 'seeker' ? 'ابحث عن موظفين' : 'ابحث عن وظيفة';
       const url = `${API_BASE_URL}/api/v1/posts?category=${encodeURIComponent(activeSubPage.category)}&postType=${encodeURIComponent(postTypeValue)}&country=${countryParam}&city=${cityParam}`;
       
       fetch(url, {
