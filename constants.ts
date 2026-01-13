@@ -1,2 +1,2 @@
 
-export const API_BASE_URL = "https://mehnati-backend-3bu7.onrender.com";
+export const API_BASE_URL = "http://207.180.236.178";
