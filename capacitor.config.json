@@ -1,0 +1,19 @@
+{
+  "appId": "com.mehnati.app",
+  "appName": "Mehnati",
+  "webDir": "dist",
+  "server": {
+    "allowNavigation": ["*"],
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
